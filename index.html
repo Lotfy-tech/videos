@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>YouTube Uploader with Progress 1:00</title>
+    <title>YouTube Uploader with Improved Error Handling 1:08</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         .progress-container {
@@ -17,30 +17,53 @@
             text-align: center;
             line-height: 20px;
             color: white;
+            transition: width 0.3s;
+        }
+        .error {
+            background-color: #ff4444;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error-message {
+            background-color: #f2dede;
+            color: #a94442;
         }
     </style>
 </head>
 <body>
     <div id="auth-button"></div>
     <div id="upload-container" style="display:none;">
-        <input type="text" id="video-title" placeholder="Video Title" required>
-        <input type="file" id="video-file" accept="video/*" required>
-        <button id="upload-button">Upload</button>
+        <div>
+            <label for="video-title">Video Title:</label>
+            <input type="text" id="video-title" placeholder="Video Title" required>
+        </div>
+        <div>
+            <label for="video-file">Video File:</label>
+            <input type="file" id="video-file" accept="video/*" required>
+        </div>
+        <button id="upload-button">Upload to YouTube</button>
         <div class="progress-container" id="progress-container">
             <div class="progress-bar" id="progress-bar">0%</div>
         </div>
+        <div id="status"></div>
     </div>
-    <div id="status"></div>
 
     <script>
         const CLIENT_ID = '176471486426-u5cad866brr1tfh7ca99fpo8oc2hqt2a.apps.googleusercontent.com';
-        const API_KEY = 'AIzaSyCpU8CEpMngGrIlnMLTs8up4xZpOZCRIyA';
         let accessToken = null;
+        let uploadXHR = null;
 
         function handleCredentialResponse(response) {
             accessToken = response.credential;
             document.getElementById('upload-container').style.display = 'block';
-            document.getElementById('status').textContent = 'Authenticated!';
+            updateStatus('Authenticated! Ready to upload.', 'success');
         }
 
         function initGoogleAuth() {
@@ -52,21 +75,39 @@
             
             google.accounts.id.renderButton(
                 document.getElementById('auth-button'),
-                { theme: 'outline', size: 'large' }
+                { theme: 'outline', size: 'large', text: 'signin_with' }
             );
+        }
+
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = type || '';
+        }
+
+        function resetUploadUI() {
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-bar').textContent = '0%';
+            document.getElementById('progress-bar').classList.remove('error');
+            document.getElementById('progress-container').style.display = 'none';
         }
 
         document.getElementById('upload-button').addEventListener('click', function() {
             if (!accessToken) {
-                alert('Please authenticate first');
+                updateStatus('Please authenticate first', 'error-message');
                 return;
             }
             
-            const title = document.getElementById('video-title').value;
+            const title = document.getElementById('video-title').value.trim();
             const fileInput = document.getElementById('video-file');
             
-            if (!title || !fileInput.files[0]) {
-                alert('Please enter a title and select a video file');
+            if (!title) {
+                updateStatus('Please enter a video title', 'error-message');
+                return;
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                updateStatus('Please select a video file', 'error-message');
                 return;
             }
             
@@ -74,61 +115,91 @@
         });
 
         function uploadVideo(file, title) {
-            const progressContainer = document.getElementById('progress-container');
+            resetUploadUI();
             const progressBar = document.getElementById('progress-bar');
-            const statusDiv = document.getElementById('status');
+            const progressContainer = document.getElementById('progress-container');
             
             progressContainer.style.display = 'block';
-            statusDiv.textContent = 'Starting upload...';
-            
+            updateStatus('Preparing upload...', '');
+
             const metadata = {
                 snippet: {
                     title: title,
-                    description: 'Uploaded via YouTube API'
+                    description: 'Uploaded via YouTube API',
+                    tags: []
                 },
                 status: {
-                    privacyStatus: 'private'
+                    privacyStatus: 'private', // or 'public' or 'unlisted'
+                    selfDeclaredMadeForKids: false
                 }
             };
-            
+
             const formData = new FormData();
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             formData.append('file', file);
-            
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status');
-            xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
-            
-            xhr.upload.onprogress = function(e) {
+
+            uploadXHR = new XMLHttpRequest();
+            uploadXHR.open('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status');
+            uploadXHR.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+
+            uploadXHR.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
                     const percentComplete = Math.round((e.loaded / e.total) * 100);
                     progressBar.style.width = percentComplete + '%';
                     progressBar.textContent = percentComplete + '%';
-                    statusDiv.textContent = 'Uploading: ' + percentComplete + '%';
+                    updateStatus('Uploading: ' + percentComplete + '%', '');
                 }
             };
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    const response = JSON.parse(xhr.responseText);
+
+            uploadXHR.onload = function() {
+                if (uploadXHR.status === 200) {
+                    const response = JSON.parse(uploadXHR.responseText);
                     progressBar.style.width = '100%';
                     progressBar.textContent = '100%';
-                    statusDiv.textContent = 'Upload complete!';
-                    alert('Done! Video ID: ' + response.id);
+                    updateStatus('Upload complete! Processing may take a few minutes.', 'success');
+                    alert('✅ Upload successful!\nVideo ID: ' + response.id + '\nTitle: ' + response.snippet.title);
                 } else {
-                    const error = JSON.parse(xhr.responseText);
-                    statusDiv.textContent = 'Error: ' + error.error.message;
-                    alert('Upload failed: ' + error.error.message);
+                    handleUploadError(uploadXHR);
                 }
             };
-            
-            xhr.onerror = function() {
-                statusDiv.textContent = 'Upload failed';
-                alert('Upload failed');
+
+            uploadXHR.onerror = function() {
+                handleUploadError(uploadXHR);
             };
-            
-            xhr.send(formData);
+
+            uploadXHR.send(formData);
         }
+
+        function handleUploadError(xhr) {
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.classList.add('error');
+            
+            try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                let errorMessage = 'Upload failed';
+                
+                if (errorResponse.error) {
+                    errorMessage += ': ' + errorResponse.error.message;
+                    if (errorResponse.error.errors) {
+                        errorMessage += '\n' + errorResponse.error.errors.map(e => e.reason).join(', ');
+                    }
+                }
+                
+                updateStatus(errorMessage, 'error-message');
+                alert('❌ Upload failed!\n' + errorMessage);
+            } catch (e) {
+                updateStatus('Upload failed (could not parse error response)', 'error-message');
+                alert('❌ Upload failed!\nNetwork error or invalid response');
+            }
+        }
+
+        // Cancel upload if page is being unloaded
+        window.addEventListener('beforeunload', function(e) {
+            if (uploadXHR && uploadXHR.readyState !== XMLHttpRequest.DONE) {
+                uploadXHR.abort();
+                return 'Upload in progress. Are you sure you want to leave?';
+            }
+        });
 
         window.onload = initGoogleAuth;
     </script>
