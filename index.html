@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>YouTube Uploader 1:15</title>
+    <title>YouTube Uploader - Complete Solution</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
-        /* Add your existing styles here */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
         .progress-container {
             width: 100%;
             background-color: #f1f1f1;
-            margin-top: 10px;
+            margin: 15px 0;
             display: none;
         }
         .progress-bar {
-            height: 20px;
+            height: 25px;
             background-color: #4CAF50;
             width: 0%;
             text-align: center;
-            line-height: 20px;
+            line-height: 25px;
             color: white;
             transition: width 0.3s;
         }
@@ -24,206 +29,347 @@
             background-color: #ff4444;
         }
         #status {
-            margin-top: 10px;
-            padding: 10px;
+            margin: 15px 0;
+            padding: 12px;
             border-radius: 4px;
         }
         .success {
             background-color: #dff0d8;
             color: #3c763d;
+            border: 1px solid #d6e9c6;
         }
         .error-message {
             background-color: #f2dede;
             color: #a94442;
+            border: 1px solid #ebccd1;
         }
         .warning {
             background-color: #fcf8e3;
             color: #8a6d3b;
+            border: 1px solid #faebcc;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 15px;
         }
     </style>
 </head>
 <body>
-    <!-- Your existing HTML structure -->
+    <h1>YouTube Video Uploader</h1>
     <div id="auth-button"></div>
+    
     <div id="upload-container" style="display:none;">
-        <div>
-            <label for="video-title">Video Title:</label>
-            <input type="text" id="video-title" placeholder="Video Title" required>
-        </div>
-        <div>
-            <label for="video-file">Video File:</label>
-            <input type="file" id="video-file" accept="video/*" required>
-        </div>
-        <button id="upload-button">Upload to YouTube</button>
+        <label for="video-title">Video Title:</label>
+        <input type="text" id="video-title" placeholder="Enter video title" required>
+        
+        <label for="video-description">Description (Optional):</label>
+        <textarea id="video-description" rows="3" placeholder="Enter video description"></textarea>
+        
+        <label for="video-file">Select Video File:</label>
+        <input type="file" id="video-file" accept="video/*" required>
+        
+        <label for="video-thumbnail">Thumbnail (Optional):</label>
+        <input type="file" id="video-thumbnail" accept="image/*">
+        
+        <label for="privacy-status">Privacy Setting:</label>
+        <select id="privacy-status">
+            <option value="private">Private</option>
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+        </select>
+        
+        <button id="upload-button">Upload Video</button>
+        
         <div class="progress-container" id="progress-container">
             <div class="progress-bar" id="progress-bar">0%</div>
         </div>
+        
         <div id="status"></div>
     </div>
 
     <script>
+        // Configuration
         const CLIENT_ID = '176471486426-u5cad866brr1tfh7ca99fpo8oc2hqt2a.apps.googleusercontent.com';
+        const API_URL = 'https://www.googleapis.com/upload/youtube/v3/videos';
+        const UPLOAD_PARAMS = 'part=snippet,status';
+        
+        // State variables
         let accessToken = null;
         let uploadXHR = null;
+        let currentVideoId = null;
 
-        function handleCredentialResponse(response) {
-            accessToken = response.credential;
-            document.getElementById('upload-container').style.display = 'block';
-            updateStatus('Authenticated! Ready to upload.', 'success');
-        }
-
+        // Initialize Google Auth
         function initGoogleAuth() {
             google.accounts.id.initialize({
                 client_id: CLIENT_ID,
                 callback: handleCredentialResponse,
-                scope: 'https://www.googleapis.com/auth/youtube.upload'
+                scope: 'https://www.googleapis.com/auth/youtube.upload',
+                ux_mode: 'popup'
             });
             
             google.accounts.id.renderButton(
                 document.getElementById('auth-button'),
-                { theme: 'outline', size: 'large', text: 'signin_with' }
+                {
+                    theme: 'filled_blue',
+                    size: 'large',
+                    text: 'continue_with',
+                    shape: 'rectangular'
+                }
             );
+            
+            // Also add a prompt to handle cases where the button doesn't work
+            google.accounts.id.prompt();
         }
 
+        // Handle auth response
+        function handleCredentialResponse(response) {
+            if (response.error) {
+                updateStatus('Authentication failed: ' + response.error, 'error-message');
+                return;
+            }
+            
+            accessToken = response.credential;
+            document.getElementById('upload-container').style.display = 'block';
+            updateStatus('Successfully authenticated. Ready to upload!', 'success');
+        }
+
+        // Update status messages
         function updateStatus(message, type) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
             statusDiv.className = type || '';
+            console.log('[Status]', type + ':', message);
         }
 
+        // Reset UI for new upload
         function resetUploadUI() {
             document.getElementById('progress-bar').style.width = '0%';
             document.getElementById('progress-bar').textContent = '0%';
             document.getElementById('progress-bar').classList.remove('error');
             document.getElementById('progress-container').style.display = 'none';
+            currentVideoId = null;
         }
 
-        document.getElementById('upload-button').addEventListener('click', function() {
+        // Main upload handler
+        document.getElementById('upload-button').addEventListener('click', async function() {
             if (!accessToken) {
                 updateStatus('Please authenticate first', 'error-message');
                 return;
             }
             
+            // Validate inputs
             const title = document.getElementById('video-title').value.trim();
-            const fileInput = document.getElementById('video-file');
-            
             if (!title) {
                 updateStatus('Please enter a video title', 'error-message');
                 return;
             }
             
+            const fileInput = document.getElementById('video-file');
             if (!fileInput.files || fileInput.files.length === 0) {
                 updateStatus('Please select a video file', 'error-message');
                 return;
             }
             
-            uploadVideo(fileInput.files[0], title);
+            const file = fileInput.files[0];
+            
+            // Validate file size (YouTube limit is 128GB)
+            if (file.size > 128 * 1024 * 1024 * 1024) {
+                updateStatus('File size exceeds YouTube limit (128GB)', 'error-message');
+                return;
+            }
+            
+            // Start upload process
+            try {
+                await uploadVideo(file, {
+                    title: title,
+                    description: document.getElementById('video-description').value,
+                    privacyStatus: document.getElementById('privacy-status').value
+                });
+                
+                // Upload successful, try to upload thumbnail if provided
+                const thumbnailInput = document.getElementById('video-thumbnail');
+                if (thumbnailInput.files && thumbnailInput.files.length > 0 && currentVideoId) {
+                    await uploadThumbnail(currentVideoId, thumbnailInput.files[0]);
+                }
+            } catch (error) {
+                console.error('Upload failed:', error);
+                // Error handling is done within the upload functions
+            }
         });
 
-        function uploadVideo(file, title) {
+        // Upload video to YouTube
+        async function uploadVideo(file, metadata) {
             resetUploadUI();
             const progressBar = document.getElementById('progress-bar');
             const progressContainer = document.getElementById('progress-container');
             
             progressContainer.style.display = 'block';
             updateStatus('Preparing upload...', '');
-
-            // Validate file size (YouTube limit is 128GB)
-            if (file.size > 128 * 1024 * 1024 * 1024) {
-                updateStatus('File size exceeds YouTube limit (128GB)', 'error-message');
-                return;
-            }
-
-            const metadata = {
+            
+            // Prepare metadata
+            const videoMetadata = {
                 snippet: {
-                    title: title,
-                    description: 'Uploaded via YouTube API',
+                    title: metadata.title,
+                    description: metadata.description || '',
                     tags: []
                 },
                 status: {
-                    privacyStatus: 'private',
+                    privacyStatus: metadata.privacyStatus || 'private',
                     selfDeclaredMadeForKids: false
                 }
             };
-
-            const formData = new FormData();
-            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            formData.append('file', file);
-
-            uploadXHR = new XMLHttpRequest();
-            uploadXHR.open('POST', 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status');
-            uploadXHR.setRequestHeader('Authorization', 'Bearer ' + accessToken);
-
-            uploadXHR.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percentComplete + '%';
-                    progressBar.textContent = percentComplete + '%';
-                    updateStatus('Uploading: ' + percentComplete + '%', '');
-                    
-                    // Temporary workaround for 100% issue
-                    if (percentComplete === 100) {
-                        updateStatus('Finalizing upload...', 'warning');
+            
+            return new Promise((resolve, reject) => {
+                const formData = new FormData();
+                formData.append('metadata', new Blob([JSON.stringify(videoMetadata)], { type: 'application/json' }));
+                formData.append('file', file);
+                
+                uploadXHR = new XMLHttpRequest();
+                uploadXHR.open('POST', `${API_URL}?${UPLOAD_PARAMS}`);
+                uploadXHR.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+                
+                // Progress tracking
+                uploadXHR.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percentComplete + '%';
+                        progressBar.textContent = percentComplete + '%';
+                        
+                        if (percentComplete < 100) {
+                            updateStatus(`Uploading: ${percentComplete}%`, '');
+                        } else {
+                            updateStatus('Finalizing upload...', 'warning');
+                        }
                     }
-                }
-            };
-
-            uploadXHR.onload = function() {
-                try {
-                    if (uploadXHR.status === 200) {
-                        const response = JSON.parse(uploadXHR.responseText);
-                        progressBar.style.width = '100%';
-                        progressBar.textContent = '100%';
-                        updateStatus('Upload complete! Processing may take a few minutes.', 'success');
-                        alert('✅ Upload successful!\nVideo ID: ' + response.id);
-                    } else {
-                        handleUploadError(uploadXHR);
+                };
+                
+                // Handle response
+                uploadXHR.onload = function() {
+                    try {
+                        if (uploadXHR.status === 200) {
+                            const response = JSON.parse(uploadXHR.responseText);
+                            currentVideoId = response.id;
+                            
+                            progressBar.style.width = '100%';
+                            progressBar.textContent = '100%';
+                            updateStatus('Upload complete! Video is being processed by YouTube.', 'success');
+                            alert(`✅ Upload successful!\nVideo ID: ${response.id}\nTitle: "${response.snippet.title}"`);
+                            resolve(response);
+                        } else {
+                            handleUploadError(uploadXHR);
+                            reject(new Error('Upload failed'));
+                        }
+                    } catch (e) {
+                        handleUploadError(uploadXHR, e);
+                        reject(e);
                     }
-                } catch (e) {
-                    handleUploadError(uploadXHR, e);
-                }
-            };
-
-            uploadXHR.onerror = function() {
-                handleUploadError(uploadXHR);
-            };
-
-            uploadXHR.onabort = function() {
-                updateStatus('Upload cancelled', 'error-message');
-            };
-
-            uploadXHR.send(formData);
+                };
+                
+                // Handle errors
+                uploadXHR.onerror = function() {
+                    handleUploadError(uploadXHR);
+                    reject(new Error('Network error'));
+                };
+                
+                uploadXHR.onabort = function() {
+                    updateStatus('Upload cancelled', 'error-message');
+                    reject(new Error('Upload cancelled'));
+                };
+                
+                // Start upload
+                uploadXHR.send(formData);
+            });
         }
 
+        // Upload thumbnail
+        async function uploadThumbnail(videoId, imageFile) {
+            updateStatus('Uploading thumbnail...', '');
+            
+            try {
+                const reader = new FileReader();
+                const imageData = await new Promise((resolve) => {
+                    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+                    reader.readAsDataURL(imageFile);
+                });
+                
+                const response = await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: JSON.stringify({
+                        media: {
+                            mimeType: imageFile.type,
+                            body: imageData
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    updateStatus('Thumbnail uploaded successfully!', 'success');
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'Failed to upload thumbnail');
+                }
+            } catch (error) {
+                updateStatus('Thumbnail upload failed: ' + error.message, 'error-message');
+                console.error('Thumbnail upload error:', error);
+            }
+        }
+
+        // Enhanced error handling
         function handleUploadError(xhr, exception) {
             const progressBar = document.getElementById('progress-bar');
             progressBar.classList.add('error');
             
             let errorMessage = 'Upload failed';
             let details = '';
+            let jsonError = null;
 
             try {
-                // Try to parse as JSON first
                 if (xhr.responseText) {
-                    const errorResponse = JSON.parse(xhr.responseText);
-                    if (errorResponse.error) {
-                        details = errorResponse.error.message || '';
-                        if (errorResponse.error.errors) {
-                            details += '\n' + errorResponse.error.errors.map(e => e.reason).join(', ');
+                    jsonError = JSON.parse(xhr.responseText);
+                    if (jsonError.error) {
+                        details = jsonError.error.message || '';
+                        if (jsonError.error.errors) {
+                            details += '\n' + jsonError.error.errors.map(e => e.reason).join(', ');
                         }
                     }
                 }
             } catch (e) {
-                // If JSON parsing fails, try to get the status text
+                console.warn('Could not parse error response as JSON');
+            }
+
+            if (!details) {
                 details = xhr.statusText || 'Unknown error';
                 
-                // Special cases
+                // Common HTTP status codes
                 if (xhr.status === 0) {
-                    details = 'Network error - are you offline?';
+                    details = 'Network error - check your internet connection';
                 } else if (xhr.status === 401) {
                     details = 'Authorization expired - please sign in again';
                 } else if (xhr.status === 403) {
-                    details = 'Quota exceeded or permission denied';
+                    details = 'Quota exceeded or permission denied. Check your Google Cloud Console.';
+                } else if (xhr.status === 413) {
+                    details = 'File too large - YouTube has size limits';
                 }
             }
 
@@ -238,20 +384,23 @@
                 status: xhr.status,
                 statusText: xhr.statusText,
                 response: xhr.responseText,
-                exception: exception
+                exception: exception,
+                parsedError: jsonError
             });
 
             alert('❌ Upload failed!\n' + errorMessage);
         }
 
+        // Warn before leaving during upload
         window.addEventListener('beforeunload', function(e) {
             if (uploadXHR && uploadXHR.readyState !== XMLHttpRequest.DONE) {
                 const confirmationMessage = 'Upload in progress - are you sure you want to leave?';
-                (e || window.event).returnValue = confirmationMessage;
+                e.returnValue = confirmationMessage;
                 return confirmationMessage;
             }
         });
 
+        // Initialize when page loads
         window.onload = initGoogleAuth;
     </script>
 </body>
