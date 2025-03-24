@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>YouTube Uploader with Improved Error Handling 1:08</title>
+    <title>YouTube Uploader 1:15</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
+        /* Add your existing styles here */
         .progress-container {
             width: 100%;
             background-color: #f1f1f1;
@@ -35,9 +36,14 @@
             background-color: #f2dede;
             color: #a94442;
         }
+        .warning {
+            background-color: #fcf8e3;
+            color: #8a6d3b;
+        }
     </style>
 </head>
 <body>
+    <!-- Your existing HTML structure -->
     <div id="auth-button"></div>
     <div id="upload-container" style="display:none;">
         <div>
@@ -122,6 +128,12 @@
             progressContainer.style.display = 'block';
             updateStatus('Preparing upload...', '');
 
+            // Validate file size (YouTube limit is 128GB)
+            if (file.size > 128 * 1024 * 1024 * 1024) {
+                updateStatus('File size exceeds YouTube limit (128GB)', 'error-message');
+                return;
+            }
+
             const metadata = {
                 snippet: {
                     title: title,
@@ -129,7 +141,7 @@
                     tags: []
                 },
                 status: {
-                    privacyStatus: 'private', // or 'public' or 'unlisted'
+                    privacyStatus: 'private',
                     selfDeclaredMadeForKids: false
                 }
             };
@@ -148,18 +160,27 @@
                     progressBar.style.width = percentComplete + '%';
                     progressBar.textContent = percentComplete + '%';
                     updateStatus('Uploading: ' + percentComplete + '%', '');
+                    
+                    // Temporary workaround for 100% issue
+                    if (percentComplete === 100) {
+                        updateStatus('Finalizing upload...', 'warning');
+                    }
                 }
             };
 
             uploadXHR.onload = function() {
-                if (uploadXHR.status === 200) {
-                    const response = JSON.parse(uploadXHR.responseText);
-                    progressBar.style.width = '100%';
-                    progressBar.textContent = '100%';
-                    updateStatus('Upload complete! Processing may take a few minutes.', 'success');
-                    alert('✅ Upload successful!\nVideo ID: ' + response.id + '\nTitle: ' + response.snippet.title);
-                } else {
-                    handleUploadError(uploadXHR);
+                try {
+                    if (uploadXHR.status === 200) {
+                        const response = JSON.parse(uploadXHR.responseText);
+                        progressBar.style.width = '100%';
+                        progressBar.textContent = '100%';
+                        updateStatus('Upload complete! Processing may take a few minutes.', 'success');
+                        alert('✅ Upload successful!\nVideo ID: ' + response.id);
+                    } else {
+                        handleUploadError(uploadXHR);
+                    }
+                } catch (e) {
+                    handleUploadError(uploadXHR, e);
                 }
             };
 
@@ -167,37 +188,67 @@
                 handleUploadError(uploadXHR);
             };
 
+            uploadXHR.onabort = function() {
+                updateStatus('Upload cancelled', 'error-message');
+            };
+
             uploadXHR.send(formData);
         }
 
-        function handleUploadError(xhr) {
+        function handleUploadError(xhr, exception) {
             const progressBar = document.getElementById('progress-bar');
             progressBar.classList.add('error');
             
+            let errorMessage = 'Upload failed';
+            let details = '';
+
             try {
-                const errorResponse = JSON.parse(xhr.responseText);
-                let errorMessage = 'Upload failed';
-                
-                if (errorResponse.error) {
-                    errorMessage += ': ' + errorResponse.error.message;
-                    if (errorResponse.error.errors) {
-                        errorMessage += '\n' + errorResponse.error.errors.map(e => e.reason).join(', ');
+                // Try to parse as JSON first
+                if (xhr.responseText) {
+                    const errorResponse = JSON.parse(xhr.responseText);
+                    if (errorResponse.error) {
+                        details = errorResponse.error.message || '';
+                        if (errorResponse.error.errors) {
+                            details += '\n' + errorResponse.error.errors.map(e => e.reason).join(', ');
+                        }
                     }
                 }
-                
-                updateStatus(errorMessage, 'error-message');
-                alert('❌ Upload failed!\n' + errorMessage);
             } catch (e) {
-                updateStatus('Upload failed (could not parse error response)', 'error-message');
-                alert('❌ Upload failed!\nNetwork error or invalid response');
+                // If JSON parsing fails, try to get the status text
+                details = xhr.statusText || 'Unknown error';
+                
+                // Special cases
+                if (xhr.status === 0) {
+                    details = 'Network error - are you offline?';
+                } else if (xhr.status === 401) {
+                    details = 'Authorization expired - please sign in again';
+                } else if (xhr.status === 403) {
+                    details = 'Quota exceeded or permission denied';
+                }
             }
+
+            if (exception) {
+                details += '\nException: ' + exception.message;
+            }
+
+            errorMessage += ': ' + details;
+            updateStatus(errorMessage, 'error-message');
+            
+            console.error('Upload error:', {
+                status: xhr.status,
+                statusText: xhr.statusText,
+                response: xhr.responseText,
+                exception: exception
+            });
+
+            alert('❌ Upload failed!\n' + errorMessage);
         }
 
-        // Cancel upload if page is being unloaded
         window.addEventListener('beforeunload', function(e) {
             if (uploadXHR && uploadXHR.readyState !== XMLHttpRequest.DONE) {
-                uploadXHR.abort();
-                return 'Upload in progress. Are you sure you want to leave?';
+                const confirmationMessage = 'Upload in progress - are you sure you want to leave?';
+                (e || window.event).returnValue = confirmationMessage;
+                return confirmationMessage;
             }
         });
 
