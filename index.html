@@ -1,99 +1,135 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>YouTube Uploader - Complete Solution</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Uploader</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
+            font-family: 'Roboto', Arial, sans-serif;
+            max-width: 800px;
             margin: 0 auto;
             padding: 20px;
+            color: #333;
         }
-        .progress-container {
-            width: 100%;
-            background-color: #f1f1f1;
-            margin: 15px 0;
-            display: none;
-        }
-        .progress-bar {
-            height: 25px;
-            background-color: #4CAF50;
-            width: 0%;
+        h1 {
+            color: #FF0000;
             text-align: center;
-            line-height: 25px;
-            color: white;
-            transition: width 0.3s;
         }
-        .error {
-            background-color: #ff4444;
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="file"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #FF0000;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #CC0000;
+        }
+        .required:after {
+            content: " *";
+            color: red;
         }
         #status {
-            margin: 15px 0;
-            padding: 12px;
+            margin-top: 20px;
+            padding: 10px;
             border-radius: 4px;
         }
         .success {
             background-color: #dff0d8;
             color: #3c763d;
-            border: 1px solid #d6e9c6;
         }
-        .error-message {
+        .error {
             background-color: #f2dede;
             color: #a94442;
-            border: 1px solid #ebccd1;
         }
-        .warning {
-            background-color: #fcf8e3;
-            color: #8a6d3b;
-            border: 1px solid #faebcc;
-        }
-        input, button {
+        .progress-container {
             width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            box-sizing: border-box;
+            background-color: #f1f1f1;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
         }
-        button {
-            background-color: #4285f4;
+        .progress-bar {
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s;
+            text-align: center;
+            line-height: 20px;
             color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
         }
-        button:hover {
-            background-color: #3367d6;
-        }
-        label {
-            font-weight: bold;
+        #auth-button {
+            margin: 20px auto;
             display: block;
-            margin-top: 15px;
         }
     </style>
 </head>
 <body>
     <h1>YouTube Video Uploader</h1>
+    
     <div id="auth-button"></div>
     
-    <div id="upload-container" style="display:none;">
-        <label for="video-title">Video Title:</label>
-        <input type="text" id="video-title" placeholder="Enter video title" required>
+    <div id="upload-container" style="display: none;">
+        <div class="form-group">
+            <label for="video-title" class="required">Video Title</label>
+            <input type="text" id="video-title" required>
+        </div>
         
-        <label for="video-description">Description (Optional):</label>
-        <textarea id="video-description" rows="3" placeholder="Enter video description"></textarea>
+        <div class="form-group">
+            <label for="video-description">Video Description</label>
+            <textarea id="video-description"></textarea>
+        </div>
         
-        <label for="video-file">Select Video File:</label>
-        <input type="file" id="video-file" accept="video/*" required>
+        <div class="form-group">
+            <label for="video-category" class="required">Video Category</label>
+            <select id="video-category" required>
+                <option value="">Select a category</option>
+                <!-- Categories will be populated by JavaScript -->
+            </select>
+        </div>
         
-        <label for="video-thumbnail">Thumbnail (Optional):</label>
-        <input type="file" id="video-thumbnail" accept="image/*">
+        <div class="form-group">
+            <label for="privacy-status" class="required">Privacy Status</label>
+            <select id="privacy-status" required>
+                <option value="private">Private</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="public">Public</option>
+            </select>
+        </div>
         
-        <label for="privacy-status">Privacy Setting:</label>
-        <select id="privacy-status">
-            <option value="private">Private</option>
-            <option value="unlisted">Unlisted</option>
-            <option value="public">Public</option>
-        </select>
+        <div class="form-group">
+            <label for="video-file" class="required">Video File</label>
+            <input type="file" id="video-file" accept="video/*" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="video-thumbnail">Video Thumbnail (Optional)</label>
+            <input type="file" id="video-thumbnail" accept="image/*">
+        </div>
         
         <button id="upload-button">Upload Video</button>
         
@@ -103,19 +139,15 @@
         
         <div id="status"></div>
     </div>
-
+    
     <script>
-        // Configuration
+        // Configuration - Replace with your actual values
         const CLIENT_ID = '176471486426-u5cad866brr1tfh7ca99fpo8oc2hqt2a.apps.googleusercontent.com';
-        const API_URL = 'https://www.googleapis.com/upload/youtube/v3/videos';
-        const UPLOAD_PARAMS = 'part=snippet,status';
-        
-        // State variables
+        const API_KEY = 'AIzaSyCpU8CEpMngGrIlnMLTs8up4xZpOZCRIyA';
         let accessToken = null;
-        let uploadXHR = null;
         let currentVideoId = null;
 
-        // Initialize Google Auth
+        // Initialize Google Identity Services
         function initGoogleAuth() {
             google.accounts.id.initialize({
                 client_id: CLIENT_ID,
@@ -134,271 +166,248 @@
                 }
             );
             
-            // Also add a prompt to handle cases where the button doesn't work
+            // Also prompt for automatic sign-in if possible
             google.accounts.id.prompt();
         }
 
-        // Handle auth response
+        // Handle authentication response
         function handleCredentialResponse(response) {
             if (response.error) {
-                updateStatus('Authentication failed: ' + response.error, 'error-message');
+                showStatus('Authentication failed: ' + response.error, 'error');
                 return;
             }
             
             accessToken = response.credential;
             document.getElementById('upload-container').style.display = 'block';
-            updateStatus('Successfully authenticated. Ready to upload!', 'success');
+            showStatus('Successfully authenticated. Ready to upload!', 'success');
+            loadVideoCategories();
         }
 
-        // Update status messages
-        function updateStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = type || '';
-            console.log('[Status]', type + ':', message);
+        // Load YouTube video categories
+        function loadVideoCategories() {
+            fetch('https://www.googleapis.com/youtube/v3/videoCategories?part=snippet&regionCode=US&key=' + API_KEY)
+                .then(response => response.json())
+                .then(data => {
+                    const categorySelect = document.getElementById('video-category');
+                    data.items.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = category.snippet.title;
+                        categorySelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    showStatus('Error loading video categories: ' + error.message, 'error');
+                });
         }
 
-        // Reset UI for new upload
-        function resetUploadUI() {
-            document.getElementById('progress-bar').style.width = '0%';
-            document.getElementById('progress-bar').textContent = '0%';
-            document.getElementById('progress-bar').classList.remove('error');
-            document.getElementById('progress-container').style.display = 'none';
-            currentVideoId = null;
+        // Show status messages
+        function showStatus(message, type) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = type || '';
+            console.log(type + ':', message);
         }
 
-        // Main upload handler
-        document.getElementById('upload-button').addEventListener('click', async function() {
+        // Handle upload button click
+        document.getElementById('upload-button').addEventListener('click', function() {
             if (!accessToken) {
-                updateStatus('Please authenticate first', 'error-message');
+                showStatus('Please authenticate first', 'error');
                 return;
             }
+            
+            const title = document.getElementById('video-title').value.trim();
+            const description = document.getElementById('video-description').value;
+            const categoryId = document.getElementById('video-category').value;
+            const privacyStatus = document.getElementById('privacy-status').value;
+            const videoFile = document.getElementById('video-file').files[0];
             
             // Validate inputs
-            const title = document.getElementById('video-title').value.trim();
             if (!title) {
-                updateStatus('Please enter a video title', 'error-message');
+                showStatus('Video title is required', 'error');
                 return;
             }
             
-            const fileInput = document.getElementById('video-file');
-            if (!fileInput.files || fileInput.files.length === 0) {
-                updateStatus('Please select a video file', 'error-message');
+            if (!categoryId) {
+                showStatus('Video category is required', 'error');
                 return;
             }
             
-            const file = fileInput.files[0];
-            
-            // Validate file size (YouTube limit is 128GB)
-            if (file.size > 128 * 1024 * 1024 * 1024) {
-                updateStatus('File size exceeds YouTube limit (128GB)', 'error-message');
+            if (!videoFile) {
+                showStatus('Video file is required', 'error');
                 return;
             }
-            
-            // Start upload process
-            try {
-                await uploadVideo(file, {
-                    title: title,
-                    description: document.getElementById('video-description').value,
-                    privacyStatus: document.getElementById('privacy-status').value
-                });
-                
-                // Upload successful, try to upload thumbnail if provided
-                const thumbnailInput = document.getElementById('video-thumbnail');
-                if (thumbnailInput.files && thumbnailInput.files.length > 0 && currentVideoId) {
-                    await uploadThumbnail(currentVideoId, thumbnailInput.files[0]);
-                }
-            } catch (error) {
-                console.error('Upload failed:', error);
-                // Error handling is done within the upload functions
-            }
-        });
-
-        // Upload video to YouTube
-        async function uploadVideo(file, metadata) {
-            resetUploadUI();
-            const progressBar = document.getElementById('progress-bar');
-            const progressContainer = document.getElementById('progress-container');
-            
-            progressContainer.style.display = 'block';
-            updateStatus('Preparing upload...', '');
             
             // Prepare metadata
-            const videoMetadata = {
+            const metadata = {
                 snippet: {
-                    title: metadata.title,
-                    description: metadata.description || '',
-                    tags: []
+                    title: title,
+                    description: description,
+                    categoryId: categoryId
                 },
                 status: {
-                    privacyStatus: metadata.privacyStatus || 'private',
+                    privacyStatus: privacyStatus,
                     selfDeclaredMadeForKids: false
                 }
             };
             
-            return new Promise((resolve, reject) => {
-                const formData = new FormData();
-                formData.append('metadata', new Blob([JSON.stringify(videoMetadata)], { type: 'application/json' }));
-                formData.append('file', file);
+            // Start upload process
+            uploadVideo(videoFile, metadata);
+        });
+
+        // Upload video using resumable upload protocol
+        async function uploadVideo(file, metadata) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressContainer = document.getElementById('progress-container');
+            
+            progressContainer.style.display = 'block';
+            showStatus('Initiating upload...', '');
+            
+            try {
+                // Step 1: Initiate resumable upload
+                const initResponse = await fetch(
+                    'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + accessToken,
+                            'Content-Type': 'application/json',
+                            'X-Upload-Content-Length': file.size,
+                            'X-Upload-Content-Type': file.type
+                        },
+                        body: JSON.stringify(metadata)
+                    }
+                );
                 
-                uploadXHR = new XMLHttpRequest();
-                uploadXHR.open('POST', `${API_URL}?${UPLOAD_PARAMS}`);
-                uploadXHR.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+                if (!initResponse.ok) {
+                    throw new Error('Failed to initiate upload: ' + initResponse.status);
+                }
                 
-                // Progress tracking
-                uploadXHR.upload.onprogress = function(e) {
+                const uploadUrl = initResponse.headers.get('Location');
+                if (!uploadUrl) {
+                    throw new Error('No upload URL received');
+                }
+                
+                // Step 2: Upload the file
+                showStatus('Uploading video...', '');
+                
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', uploadUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type);
+                xhr.setRequestHeader('Content-Length', file.size);
+                
+                xhr.upload.onprogress = function(e) {
                     if (e.lengthComputable) {
                         const percentComplete = Math.round((e.loaded / e.total) * 100);
                         progressBar.style.width = percentComplete + '%';
                         progressBar.textContent = percentComplete + '%';
                         
                         if (percentComplete < 100) {
-                            updateStatus(`Uploading: ${percentComplete}%`, '');
+                            showStatus('Uploading: ' + percentComplete + '%', '');
                         } else {
-                            updateStatus('Finalizing upload...', 'warning');
+                            showStatus('Finalizing upload...', '');
                         }
                     }
                 };
                 
-                // Handle response
-                uploadXHR.onload = function() {
-                    try {
-                        if (uploadXHR.status === 200) {
-                            const response = JSON.parse(uploadXHR.responseText);
-                            currentVideoId = response.id;
-                            
-                            progressBar.style.width = '100%';
-                            progressBar.textContent = '100%';
-                            updateStatus('Upload complete! Video is being processed by YouTube.', 'success');
-                            alert(`✅ Upload successful!\nVideo ID: ${response.id}\nTitle: "${response.snippet.title}"`);
-                            resolve(response);
-                        } else {
-                            handleUploadError(uploadXHR);
-                            reject(new Error('Upload failed'));
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        currentVideoId = response.id;
+                        progressBar.style.width = '100%';
+                        progressBar.textContent = '100%';
+                        showStatus('Upload complete! Video is being processed.', 'success');
+                        
+                        // Upload thumbnail if provided
+                        const thumbnailFile = document.getElementById('video-thumbnail').files[0];
+                        if (thumbnailFile) {
+                            uploadThumbnail(currentVideoId, thumbnailFile);
                         }
-                    } catch (e) {
-                        handleUploadError(uploadXHR, e);
-                        reject(e);
+                    } else {
+                        handleUploadError(xhr);
                     }
                 };
                 
-                // Handle errors
-                uploadXHR.onerror = function() {
-                    handleUploadError(uploadXHR);
-                    reject(new Error('Network error'));
+                xhr.onerror = function() {
+                    handleUploadError(xhr);
                 };
                 
-                uploadXHR.onabort = function() {
-                    updateStatus('Upload cancelled', 'error-message');
-                    reject(new Error('Upload cancelled'));
-                };
+                xhr.send(file);
                 
-                // Start upload
-                uploadXHR.send(formData);
-            });
+            } catch (error) {
+                showStatus('Upload failed: ' + error.message, 'error');
+                console.error('Upload error:', error);
+            }
         }
 
-        // Upload thumbnail
+        // Upload thumbnail for a video
         async function uploadThumbnail(videoId, imageFile) {
-            updateStatus('Uploading thumbnail...', '');
+            showStatus('Uploading thumbnail...', '');
             
             try {
-                const reader = new FileReader();
-                const imageData = await new Promise((resolve) => {
-                    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
-                    reader.readAsDataURL(imageFile);
-                });
+                const formData = new FormData();
+                formData.append('image', imageFile);
                 
-                const response = await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/octet-stream'
-                    },
-                    body: JSON.stringify({
-                        media: {
-                            mimeType: imageFile.type,
-                            body: imageData
-                        }
-                    })
-                });
+                const response = await fetch(
+                    `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${videoId}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + accessToken
+                        },
+                        body: formData
+                    }
+                );
                 
                 if (response.ok) {
-                    updateStatus('Thumbnail uploaded successfully!', 'success');
+                    showStatus('Thumbnail uploaded successfully!', 'success');
                 } else {
                     const error = await response.json();
                     throw new Error(error.error?.message || 'Failed to upload thumbnail');
                 }
             } catch (error) {
-                updateStatus('Thumbnail upload failed: ' + error.message, 'error-message');
+                showStatus('Thumbnail upload failed: ' + error.message, 'error');
                 console.error('Thumbnail upload error:', error);
             }
         }
 
-        // Enhanced error handling
-        function handleUploadError(xhr, exception) {
+        // Handle upload errors
+        function handleUploadError(xhr) {
             const progressBar = document.getElementById('progress-bar');
             progressBar.classList.add('error');
             
             let errorMessage = 'Upload failed';
-            let details = '';
-            let jsonError = null;
-
+            
             try {
                 if (xhr.responseText) {
-                    jsonError = JSON.parse(xhr.responseText);
-                    if (jsonError.error) {
-                        details = jsonError.error.message || '';
-                        if (jsonError.error.errors) {
-                            details += '\n' + jsonError.error.errors.map(e => e.reason).join(', ');
+                    const errorResponse = JSON.parse(xhr.responseText);
+                    if (errorResponse.error) {
+                        errorMessage += ': ' + errorResponse.error.message;
+                        if (errorResponse.error.errors) {
+                            errorMessage += '\n' + errorResponse.error.errors.map(e => e.reason).join(', ');
                         }
                     }
                 }
             } catch (e) {
-                console.warn('Could not parse error response as JSON');
-            }
-
-            if (!details) {
-                details = xhr.statusText || 'Unknown error';
+                errorMessage += ': ' + xhr.statusText || 'Unknown error';
                 
                 // Common HTTP status codes
                 if (xhr.status === 0) {
-                    details = 'Network error - check your internet connection';
+                    errorMessage = 'Network error - check your internet connection';
                 } else if (xhr.status === 401) {
-                    details = 'Authorization expired - please sign in again';
+                    errorMessage = 'Authorization expired - please sign in again';
                 } else if (xhr.status === 403) {
-                    details = 'Quota exceeded or permission denied. Check your Google Cloud Console.';
-                } else if (xhr.status === 413) {
-                    details = 'File too large - YouTube has size limits';
+                    errorMessage = 'Quota exceeded or permission denied';
                 }
             }
-
-            if (exception) {
-                details += '\nException: ' + exception.message;
-            }
-
-            errorMessage += ': ' + details;
-            updateStatus(errorMessage, 'error-message');
             
+            showStatus(errorMessage, 'error');
             console.error('Upload error:', {
                 status: xhr.status,
                 statusText: xhr.statusText,
-                response: xhr.responseText,
-                exception: exception,
-                parsedError: jsonError
+                response: xhr.responseText
             });
-
-            alert('❌ Upload failed!\n' + errorMessage);
         }
-
-        // Warn before leaving during upload
-        window.addEventListener('beforeunload', function(e) {
-            if (uploadXHR && uploadXHR.readyState !== XMLHttpRequest.DONE) {
-                const confirmationMessage = 'Upload in progress - are you sure you want to leave?';
-                e.returnValue = confirmationMessage;
-                return confirmationMessage;
-            }
-        });
 
         // Initialize when page loads
         window.onload = initGoogleAuth;
